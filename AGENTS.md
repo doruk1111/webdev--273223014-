@@ -5,17 +5,20 @@ Read this file at the start of every session. Keep it short and correct; update 
 ## Project
 <!-- One or two sentences: what the app does and for whom. Link SPEC.md. -->
 See `SPEC.md` for goals, non-goals and acceptance criteria.
+Studying Together is a web app where students find and join study groups for their courses and see the upcoming study sessions, and group owners schedule those sessions with a time and a place.
 
 ## Commands
 <!-- How to install, run, test. Keep these exact and working. -->
-- Install: 
-- Run: 
-- Test: 
-- Coverage: 
-- MCP server: 
+- Install: `npm install`
+- Run: `npm start`
+- Test: `npm test`
+- Coverage:
+- MCP server: `npm run --silent mcp`
 
 ## Conventions
 <!-- Folder layout, naming, where business rules live, how errors are returned to the client. -->
+- Three layers that do not skip each other: `routes/` → `services/` → `data/`. No SQL outside `data/`.
+- Business rules (who may join, who may add a session) go in `services/`, and every rule gets a test that names its criterion.
 
 ## Layers
 <!-- Fill in the file or folder for each layer. -->
@@ -30,7 +33,7 @@ that talks to the database directly is a second, unguarded way into your data: n
 
 ## The model feature
 <!-- Provider, env var, and the call site. -->
-- The provider is named in exactly one file: 
+- The provider is named in exactly one file:
 - The key comes from an environment variable and is never committed or logged.
 - Every call has a timeout and a deterministic fallback, so the app still works when the provider is down or rate-limited.
 - The model's output is re-checked against real data before anything is saved or shown.
