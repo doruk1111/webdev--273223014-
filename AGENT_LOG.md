@@ -9,7 +9,14 @@ One entry per agent session, newest at the bottom. Be honest: what went wrong is
 - Went wrong:
 - Changed by hand:
 
-## 2026-11-09 · Slice 1 migration with Gemini CLI
+## 2026-11-09 · FIP Laboratory Exercise 2
+- Goal: Have the plan and build slice 1 (sign-in and the list of study groups) from SPEC.md.
+- Delegated: The plan for slice 1, then the build (database, sign-in, list screen).
+- Checkpoints: Read the plan and checked it against the non-goals and the slice 1 criteria. No build checkpoints were reached.
+- Went wrong: Gemini hung for several minutes on the plan, three times in a row, with the default model and with gemma-4-31b-it. It later produced a plan, but the plan did not require a sign-in on GET /api/groups, named no database, and did not say how the seeded passwords are hashed. The build then hung, so no files were created.
+- Changed by hand: Nothing in the code yet. I switched the model to gemma-4-31b-it as suggested in the course channel.
+
+## 2026-11-19 · Slice 1 migration with Gemini CLI
 - Goal: Have the agent write the slice 1 migration (users and groups tables with seed data).
 - Delegated: The migration file only, one small step at a time.
 - Checkpoints: Read the plan and corrected it before approving. Read the migration with cat before committing.
