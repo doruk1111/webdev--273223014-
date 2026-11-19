@@ -71,6 +71,7 @@ Plain HTML and JavaScript with plain CSS. Four screens: sign in, the list of stu
 - [AC-9] A visitor who opens /groups without signing in is sent to /login instead.
 - [AC-10] After signing in with a seeded account, /groups shows the three seeded groups, each with its name and course.
 - [AC-11] If one group row is deleted in the database and the page is reloaded, that group disappears from /groups.
+- [AC-12] A visitor who opens `/` without signing in is sent to `/login`.
 
 ## Traceability
 <!-- Filled in from Exercise 3 onward: each AC id, and the test that names it. -->
@@ -80,3 +81,6 @@ Plain HTML and JavaScript with plain CSS. Four screens: sign in, the list of stu
 
 ## Spec vs result
 <!-- After the agent builds the slice: which criteria passed, which it missed or reinterpreted, and what you changed in this spec because of it. -->
+- Passed: AC-9 (opening /groups without signing in sends me to /login, and curl on /groups returned 302 to /login), the 401 on /api/groups without a session, and AC-10 (after signing in with the seeded account I see the study groups from the database). AC-11: If one group row is deleted in the database and the page is reloaded, that group disappears from /groups.
+- Missed: The agent's first migration used a description column instead of the course column my criteria needed, and it named the hash column password. It also said PostgreSQL was already running in the codespace, but psql did not exist, so I installed it myself. It also wrote server.js and the routes in a request that looked like it had failed, and they reached a commit before I had reviewed them. No criterion said what a visitor sees at /, so the app answers "Cannot GET /".
+- Changed: I added AC-12 under Slice 1: a visitor who opens / is sent to /login. I also made AC-10 name the course explicitly.
