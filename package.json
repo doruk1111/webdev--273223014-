@@ -20,5 +20,12 @@
   "bugs": {
     "url": "https://github.com/doruk1111/webdev--273223014-/issues"
   },
-  "homepage": "https://github.com/doruk1111/webdev--273223014-#readme"
+  "homepage": "https://github.com/doruk1111/webdev--273223014-#readme",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "connect-pg-simple": "^10.0.0",
+    "express": "^5.3.0",
+    "express-session": "^1.19.0",
+    "pg": "^8.23.1"
+  }
 }
