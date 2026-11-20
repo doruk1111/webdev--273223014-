@@ -61,6 +61,9 @@ that talks to the database directly is a second, unguarded way into your data: n
 - adding, renaming or removing an MCP tool
 - changing a coverage threshold
 - sending user data to a third-party model
+- changing a status code, an error message or an existing test after the test was first written
+- adding a query outside data/, or any second way into the database
+- editing package.json scripts (the mcp script must stay)
 
 ## Never
 - commit secrets, passwords, API keys or an OAuth client secret

@@ -22,3 +22,10 @@ One entry per agent session, newest at the bottom. Be honest: what went wrong is
 - Checkpoints: Read the plan and corrected it before approving. Read the migration with cat before committing.
 - Went wrong: Free-tier quota errors (16,000 input tokens per minute) stopped the earlier attempts. The first version of the migration used a description column instead of the course column the spec requires, named the hash column password, and contained a hash that was not generated.
 - Changed by hand: Switched to my own API key. Asked the agent to replace description with course, rename the column to password_hash and seed the hash with pgcrypto.
+
+## 2026-11-20 · Exercise 3 plan: schedule sessions without clashes
+- Goal: A written plan for the session feature (a sessions table, a no-overlap rule in the service, endpoints with status codes, an authorization check, the UI and tests), with no code yet.
+- Autonomy: The agent works alone inside one step of the plan at a time. I read every diff before each commit, and I decide what the failure tests must prove.
+- Checkpoints: Plan review before any code. npm test green before each commit. A permission prompt for everything on the always-ask list, always answered with allow once. One small request per step, with no file exploring.
+- Went wrong:
+- Changed by hand:

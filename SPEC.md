@@ -73,11 +73,29 @@ Plain HTML and JavaScript with plain CSS. Four screens: sign in, the list of stu
 - [AC-11] If one group row is deleted in the database and the page is reloaded, that group disappears from /groups.
 - [AC-12] A visitor who opens `/` without signing in is sent to `/login`.
 
+### Slice 2: schedule a session without clashes
+- [AC-13] A session whose end is not after its start is refused with 422, and no row is added to `sessions`.
+- [AC-14] A session that overlaps another session of the same group is refused with 409 and a message that names the session it clashes with, and no row is added to `sessions`.
+- [AC-15] A session that starts exactly when another session of the same group ends is accepted with 201.
+- [AC-16] A session at the same time in a different group is accepted with 201, because clashes are only checked inside one group.
+- [AC-17] The creator of a session who cancels it gets 204, the row is removed from `sessions`, and the same time can be scheduled again.
+- [AC-18] A signed-in user who did not create a session and tries to cancel it gets 403, and the row is still in `sessions`.
+- [AC-19] A request to schedule or cancel a session with no signed-in user gets 401, and `sessions` is unchanged.
+
+
+
 ## Traceability
 <!-- Filled in from Exercise 3 onward: each AC id, and the test that names it. -->
 | Criterion | Test |
 | --- | --- |
 | AC-1 |  |
+| AC-13 | |
+| AC-14 | |
+| AC-15 | |
+| AC-16 | |
+| AC-17 | |
+| AC-18 | |
+| AC-19 | |
 
 ## Spec vs result
 <!-- After the agent builds the slice: which criteria passed, which it missed or reinterpreted, and what you changed in this spec because of it. -->
