@@ -1,22 +1,29 @@
-const test = require('node:test');
+const { test, before, after, afterEach } = require('node:test');
 const assert = require('node:assert');
+const { once } = require('node:events');
 const app = require('../server');
 const sessionsData = require('../data/sessions');
 
 let server;
 let baseUrl;
+const created = [];
 
-test.before(async () => {
-  await new Promise((resolve) => {
-    server = app.listen(0, resolve);
-  });
+before(async () => {
+  server = app.listen(0);
+  await once(server, 'listening');
   baseUrl = `http://127.0.0.1:${server.address().port}`;
 });
 
-test.after(async () => {
-  await new Promise((resolve) => {
-    server.close(resolve);
-  });
+after(async () => {
+  if (server.closeAllConnections) server.closeAllConnections();
+  await new Promise((resolve) => server.close(resolve));
+});
+
+// Every row a test creates is removed afterwards, even when the test fails.
+afterEach(async () => {
+  for (const id of created.splice(0)) {
+    await sessionsData.remove(id);
+  }
 });
 
 async function login(email, password) {
@@ -25,365 +32,148 @@ async function login(email, password) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
-  const setCookie = res.headers.get('set-cookie');
-  if (!setCookie) return '';
-  return setCookie.split(';')[0];
+  assert.strictEqual(res.status, 200, `login as ${email} failed with ${res.status}`);
+  const setCookie = res.headers.getSetCookie();
+  assert.ok(setCookie.length > 0, 'login returned no session cookie');
+  return setCookie[0].split(';')[0];
+}
+
+function loginUser1() {
+  return login('student@example.com', 'student123');
+}
+
+function loginUser2() {
+  return login('student2@example.com', 'student456');
+}
+
+async function schedule(cookie, groupId, startTime, endTime, place) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (cookie) headers.Cookie = cookie;
+  const res = await fetch(`${baseUrl}/api/groups/${groupId}/sessions`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ startTime, endTime, place }),
+  });
+  let body = null;
+  try {
+    body = await res.json();
+  } catch (e) {
+    body = null;
+  }
+  if (res.status === 201 && body && body.id) created.push(body.id);
+  return { res, body };
+}
+
+async function cancel(cookie, sessionId) {
+  const headers = {};
+  if (cookie) headers.Cookie = cookie;
+  return fetch(`${baseUrl}/api/sessions/${sessionId}`, { method: 'DELETE', headers });
+}
+
+async function list(cookie, groupId) {
+  const res = await fetch(`${baseUrl}/api/groups/${groupId}/sessions`, {
+    headers: { Cookie: cookie },
+  });
+  assert.strictEqual(res.status, 200);
+  return res.json();
+}
+
+async function count(groupId) {
+  return (await sessionsData.listByGroup(groupId)).length;
 }
 
 test('AC-13: end equal to start gets 422, and the group has no new row', async () => {
-  const cookie = await login('student@example.com', 'student123');
-  const groupId = 1;
-
-  const getResBefore = await fetch(`${baseUrl}/api/groups/${groupId}/sessions`);
-  const sessionsBefore = await getResBefore.json();
-  const countBefore = sessionsBefore.length;
-
-  const res = await fetch(`${baseUrl}/api/groups/${groupId}/sessions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Cookie: cookie,
-    },
-    body: JSON.stringify({
-      startTime: '2027-01-01T10:00:00Z',
-      endTime: '2027-01-01T10:00:00Z',
-      place: 'Room 2027-AC13',
-    }),
-  });
-
+  const cookie = await loginUser1();
+  const before = await count(3);
+  const { res } = await schedule(cookie, 3, '2027-02-01T10:00:00Z', '2027-02-01T10:00:00Z', 'Room 2027-AC13');
   assert.strictEqual(res.status, 422);
-
-  const getResAfter = await fetch(`${baseUrl}/api/groups/${groupId}/sessions`);
-  const sessionsAfter = await getResAfter.json();
-  assert.strictEqual(sessionsAfter.length, countBefore);
+  assert.strictEqual(await count(3), before);
 });
 
 test('AC-14: an overlapping session in the same group gets 409, and no row is added', async () => {
-  const cookie = await login('student@example.com', 'student123');
-  const groupId = 1;
+  const cookie = await loginUser1();
+  const first = await schedule(cookie, 3, '2027-02-02T10:00:00Z', '2027-02-02T12:00:00Z', 'Room 2027-AC14-1');
+  assert.strictEqual(first.res.status, 201);
+  const before = await count(3);
+  const second = await schedule(cookie, 3, '2027-02-02T11:00:00Z', '2027-02-02T13:00:00Z', 'Room 2027-AC14-2');
+  assert.strictEqual(second.res.status, 409);
+  assert.strictEqual(await count(3), before);
+  const sessions = await list(cookie, 3);
+  assert.strictEqual(sessions.filter((s) => s.place === 'Room 2027-AC14-2').length, 0);
+});
 
-  const res1 = await fetch(`${baseUrl}/api/groups/${groupId}/sessions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Cookie: cookie,
-    },
-    body: JSON.stringify({
-      startTime: '2027-02-01T10:00:00Z',
-      endTime: '2027-02-01T12:00:00Z',
-      place: 'Room 2027-AC14-1',
-    }),
-  });
-  const created1 = await res1.json();
-  const createdId = created1.id;
+test('AC-15: a session that starts exactly when another in the same group ends gets 201', async () => {
+  const cookie = await loginUser1();
+  const first = await schedule(cookie, 3, '2027-02-03T10:00:00Z', '2027-02-03T11:00:00Z', 'Room 2027-AC15-1');
+  assert.strictEqual(first.res.status, 201);
+  const second = await schedule(cookie, 3, '2027-02-03T11:00:00Z', '2027-02-03T12:00:00Z', 'Room 2027-AC15-2');
+  assert.strictEqual(second.res.status, 201);
+});
 
-  try {
-    const res2 = await fetch(`${baseUrl}/api/groups/${groupId}/sessions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: cookie,
-      },
-      body: JSON.stringify({
-        startTime: '2027-02-01T11:00:00Z',
-        endTime: '2027-02-01T13:00:00Z',
-        place: 'Room 2027-AC14-2',
-      }),
-    });
+test('AC-16: the same time in a different group gets 201', async () => {
+  const cookie = await loginUser1();
+  const first = await schedule(cookie, 3, '2027-02-04T10:00:00Z', '2027-02-04T11:00:00Z', 'Room 2027-AC16-1');
+  assert.strictEqual(first.res.status, 201);
+  const second = await schedule(cookie, 2, '2027-02-04T10:00:00Z', '2027-02-04T11:00:00Z', 'Room 2027-AC16-2');
+  assert.strictEqual(second.res.status, 201);
+});
 
-    assert.strictEqual(res2.status, 409);
+test('AC-17: the creator sends DELETE and gets 204, the row is gone from GET, and the same time can be scheduled again with 201', async () => {
+  const cookie = await loginUser1();
+  const first = await schedule(cookie, 3, '2027-02-05T10:00:00Z', '2027-02-05T11:00:00Z', 'Room 2027-AC17-1');
+  assert.strictEqual(first.res.status, 201);
+  const id = first.body.id;
+  const delRes = await cancel(cookie, id);
+  assert.strictEqual(delRes.status, 204);
+  const sessions = await list(cookie, 3);
+  assert.strictEqual(sessions.find((s) => s.id === id), undefined);
+  const again = await schedule(cookie, 3, '2027-02-05T10:00:00Z', '2027-02-05T11:00:00Z', 'Room 2027-AC17-2');
+  assert.strictEqual(again.res.status, 201);
+});
 
-    const getRes = await fetch(`${baseUrl}/api/groups/${groupId}/sessions`);
-    const sessionsList = await getRes.json();
-    const overlappingCreated = sessionsList.filter((s) => s.place === 'Room 2027-AC14-2');
-    assert.strictEqual(overlappingCreated.length, 0);
-  } finally {
-    if (createdId) {
-      await sessionsData.remove(createdId);
-    }
-  }
+test('AC-18: user 2 sends DELETE for a session of user 1 and gets 403, and the session is still in GET', async () => {
+  const cookie1 = await loginUser1();
+  const cookie2 = await loginUser2();
+  const first = await schedule(cookie1, 3, '2027-02-06T10:00:00Z', '2027-02-06T11:00:00Z', 'Room 2027-AC18');
+  assert.strictEqual(first.res.status, 201);
+  const id = first.body.id;
+  const delRes = await cancel(cookie2, id);
+  assert.strictEqual(delRes.status, 403);
+  const sessions = await list(cookie1, 3);
+  assert.ok(sessions.find((s) => s.id === id));
 });
 
 test('AC-6: user 2 scheduling in group 1 gets 403, and no row is added', async () => {
-  const cookie2 = await login('student2@example.com', 'student456');
-  const groupId = 1;
-
-  const getResBefore = await fetch(`${baseUrl}/api/groups/${groupId}/sessions`);
-  const sessionsBefore = await getResBefore.json();
-  const countBefore = sessionsBefore.length;
-
-  const res = await fetch(`${baseUrl}/api/groups/${groupId}/sessions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Cookie: cookie2,
-    },
-    body: JSON.stringify({
-      startTime: '2027-03-01T10:00:00Z',
-      endTime: '2027-03-01T11:00:00Z',
-      place: 'Room 2027-AC6',
-    }),
-  });
-
+  const cookie2 = await loginUser2();
+  const before = await count(1);
+  const { res } = await schedule(cookie2, 1, '2027-02-07T10:00:00Z', '2027-02-07T11:00:00Z', 'Room 2027-AC6');
   assert.strictEqual(res.status, 403);
-
-  const getResAfter = await fetch(`${baseUrl}/api/groups/${groupId}/sessions`);
-  const sessionsAfter = await getResAfter.json();
-  assert.strictEqual(sessionsAfter.length, countBefore);
+  assert.strictEqual(await count(1), before);
 });
 
 test('AC-19: POST and DELETE with no cookie get 401, and the group session count is unchanged', async () => {
-  const cookie = await login('student@example.com', 'student123');
-  const groupId = 1;
+  const cookie = await loginUser1();
+  const first = await schedule(cookie, 3, '2027-02-08T10:00:00Z', '2027-02-08T11:00:00Z', 'Room 2027-AC19-1');
+  assert.strictEqual(first.res.status, 201);
+  const before = await count(3);
 
-  const createRes = await fetch(`${baseUrl}/api/groups/${groupId}/sessions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Cookie: cookie,
-    },
-    body: JSON.stringify({
-      startTime: '2027-04-01T10:00:00Z',
-      endTime: '2027-04-01T11:00:00Z',
-      place: 'Room 2027-AC19',
-    }),
-  });
-  const session = await createRes.json();
-  const sessionId = session.id;
+  const post = await schedule(null, 3, '2027-02-08T14:00:00Z', '2027-02-08T15:00:00Z', 'Room 2027-AC19-2');
+  assert.strictEqual(post.res.status, 401);
 
-  try {
-    const postRes = await fetch(`${baseUrl}/api/groups/${groupId}/sessions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        startTime: '2027-04-02T10:00:00Z',
-        endTime: '2027-04-02T11:00:00Z',
-        place: 'Room 2027-AC19-nocookie',
-      }),
-    });
-    assert.strictEqual(postRes.status, 401);
+  const del = await cancel(null, first.body.id);
+  assert.strictEqual(del.status, 401);
 
-    const deleteRes = await fetch(`${baseUrl}/api/sessions/${sessionId}`, {
-      method: 'DELETE',
-    });
-    assert.strictEqual(deleteRes.status, 401);
-  } finally {
-    if (sessionId) {
-      await sessionsData.remove(sessionId);
-    }
-  }
+  assert.strictEqual(await count(3), before);
 });
 
 test('AC-20: 404 for POST to a group that does not exist', async () => {
-  const cookie = await login('student@example.com', 'student123');
-  const nonExistentGroupId = 999999;
-
-  const res = await fetch(`${baseUrl}/api/groups/${nonExistentGroupId}/sessions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Cookie: cookie,
-    },
-    body: JSON.stringify({
-      startTime: '2027-05-01T10:00:00Z',
-      endTime: '2027-05-01T11:00:00Z',
-      place: 'Room 2027-404-group',
-    }),
-  });
-
+  const cookie = await loginUser1();
+  const { res } = await schedule(cookie, 999999, '2027-02-09T10:00:00Z', '2027-02-09T11:00:00Z', 'Room 2027-AC20');
   assert.strictEqual(res.status, 404);
 });
 
 test('AC-21: 404 for DELETE of a session that does not exist', async () => {
-  const cookie = await login('student@example.com', 'student123');
-  const nonExistentSessionId = 999999;
-
-  const res = await fetch(`${baseUrl}/api/sessions/${nonExistentSessionId}`, {
-    method: 'DELETE',
-    headers: {
-      Cookie: cookie,
-    },
-  });
-
+  const cookie = await loginUser1();
+  const res = await cancel(cookie, 999999);
   assert.strictEqual(res.status, 404);
-});
-
-test('AC-15: a session that starts exactly when another in the same group ends gets 201', async () => {
-  const cookie = await login('student@example.com', 'student123');
-  const groupId = 1;
-
-  const res1 = await fetch(`${baseUrl}/api/groups/${groupId}/sessions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Cookie: cookie,
-    },
-    body: JSON.stringify({
-      startTime: '2027-06-01T10:00:00Z',
-      endTime: '2027-06-01T11:00:00Z',
-      place: 'Room 2027-AC15-1',
-    }),
-  });
-  const created1 = await res1.json();
-  const id1 = created1.id;
-
-  let id2;
-  try {
-    const res2 = await fetch(`${baseUrl}/api/groups/${groupId}/sessions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: cookie,
-      },
-      body: JSON.stringify({
-        startTime: '2027-06-01T11:00:00Z',
-        endTime: '2027-06-01T12:00:00Z',
-        place: 'Room 2027-AC15-2',
-      }),
-    });
-    assert.strictEqual(res2.status, 201);
-    const created2 = await res2.json();
-    id2 = created2.id;
-  } finally {
-    if (id1) await sessionsData.remove(id1).catch(() => {});
-    if (id2) await sessionsData.remove(id2).catch(() => {});
-  }
-});
-
-test('AC-16: the same time in a different group gets 201', async () => {
-  const cookie = await login('student@example.com', 'student123');
-  const groupId1 = 1;
-  const groupId2 = 2;
-
-  const res1 = await fetch(`${baseUrl}/api/groups/${groupId1}/sessions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Cookie: cookie,
-    },
-    body: JSON.stringify({
-      startTime: '2027-07-01T10:00:00Z',
-      endTime: '2027-07-01T11:00:00Z',
-      place: 'Room 2027-AC16-1',
-    }),
-  });
-  const created1 = await res1.json();
-  const id1 = created1.id;
-
-  let id2;
-  try {
-    const res2 = await fetch(`${baseUrl}/api/groups/${groupId2}/sessions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: cookie,
-      },
-      body: JSON.stringify({
-        startTime: '2027-07-01T10:00:00Z',
-        endTime: '2027-07-01T11:00:00Z',
-        place: 'Room 2027-AC16-2',
-      }),
-    });
-    assert.strictEqual(res2.status, 201);
-    const created2 = await res2.json();
-    id2 = created2.id;
-  } finally {
-    if (id1) await sessionsData.remove(id1).catch(() => {});
-    if (id2) await sessionsData.remove(id2).catch(() => {});
-  }
-});
-
-test('AC-17: the creator sends DELETE and gets 204, the row is gone from GET, and the same time can be scheduled again with 201', async () => {
-  const cookie = await login('student@example.com', 'student123');
-  const groupId = 1;
-
-  const res1 = await fetch(`${baseUrl}/api/groups/${groupId}/sessions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Cookie: cookie,
-    },
-    body: JSON.stringify({
-      startTime: '2027-08-01T10:00:00Z',
-      endTime: '2027-08-01T11:00:00Z',
-      place: 'Room 2027-AC17',
-    }),
-  });
-  const created1 = await res1.json();
-  const id1 = created1.id;
-
-  let id2;
-  try {
-    const delRes = await fetch(`${baseUrl}/api/sessions/${id1}`, {
-      method: 'DELETE',
-      headers: {
-        Cookie: cookie,
-      },
-    });
-    assert.strictEqual(delRes.status, 204);
-
-    const getRes = await fetch(`${baseUrl}/api/groups/${groupId}/sessions`);
-    const sessionsList = await getRes.json();
-    const found = sessionsList.find((s) => s.id === id1);
-    assert.strictEqual(found, undefined);
-
-    const res2 = await fetch(`${baseUrl}/api/groups/${groupId}/sessions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: cookie,
-      },
-      body: JSON.stringify({
-        startTime: '2027-08-01T10:00:00Z',
-        endTime: '2027-08-01T11:00:00Z',
-        place: 'Room 2027-AC17-again',
-      }),
-    });
-    assert.strictEqual(res2.status, 201);
-    const created2 = await res2.json();
-    id2 = created2.id;
-  } finally {
-    if (id1) await sessionsData.remove(id1).catch(() => {});
-    if (id2) await sessionsData.remove(id2).catch(() => {});
-  }
-});
-
-test('AC-18: user 2 sends DELETE for a session of user 1 and gets 403, and the session is still in GET', async () => {
-  const cookie1 = await login('student@example.com', 'student123');
-  const cookie2 = await login('student2@example.com', 'student456');
-  const groupId = 1;
-
-  const res1 = await fetch(`${baseUrl}/api/groups/${groupId}/sessions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Cookie: cookie1,
-    },
-    body: JSON.stringify({
-      startTime: '2027-09-01T10:00:00Z',
-      endTime: '2027-09-01T11:00:00Z',
-      place: 'Room 2027-AC18',
-    }),
-  });
-  const created1 = await res1.json();
-  const id1 = created1.id;
-
-  try {
-    const delRes = await fetch(`${baseUrl}/api/sessions/${id1}`, {
-      method: 'DELETE',
-      headers: {
-        Cookie: cookie2,
-      },
-    });
-    assert.strictEqual(delRes.status, 403);
-
-    const getRes = await fetch(`${baseUrl}/api/groups/${groupId}/sessions`);
-    const sessionsList = await getRes.json();
-    const found = sessionsList.find((s) => s.id === id1);
-    assert.ok(found);
-  } finally {
-    if (id1) await sessionsData.remove(id1).catch(() => {});
-  }
 });

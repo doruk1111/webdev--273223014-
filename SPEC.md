@@ -81,6 +81,8 @@ Plain HTML and JavaScript with plain CSS. Four screens: sign in, the list of stu
 - [AC-17] The creator of a session who cancels it gets 204, the row is removed from `sessions`, and the same time can be scheduled again.
 - [AC-18] A signed-in user who did not create a session and tries to cancel it gets 403, and the row is still in `sessions`.
 - [AC-19] A request to schedule or cancel a session with no signed-in user gets 401, and `sessions` is unchanged.
+- [AC-20] A request to schedule a session in a group that does not exist gets 404, and `sessions` is unchanged.
+- [AC-21] A request to cancel a session that does not exist gets 404.
 
 
 

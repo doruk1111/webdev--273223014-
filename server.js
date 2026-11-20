@@ -26,6 +26,7 @@ app.use(
 
 app.use(require('./routes/auth'));
 app.use(require('./routes/groups'));
+app.use(require('./routes/sessions'));
 
 const port = 3000;
 if (require.main === module) {
