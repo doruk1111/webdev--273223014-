@@ -29,3 +29,4 @@ One entry per agent session, newest at the bottom. Be honest: what went wrong is
 - Checkpoints: Plan review before any code. npm test green before each commit. A permission prompt for everything on the always-ask list, always answered with allow once. One small request per step, with no file exploring.
 - Went wrong:
 - Changed by hand:
+- Changed in review: The plan raised 401 in the service; I moved it before the service and left only 403 there. It seeded a memberships table that does not exist; I limited the seed to a second user. It added title and agenda columns, an AI suggestion, an MCP tool and AC-12, none of which I asked for; removed. It put tests in checks/; moved to tests/. It had no endpoint to list a group's sessions; added one. The revision still left the owner check ambiguous between route and service, and had no UI states; I fixed both in the step prompts.
