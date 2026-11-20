@@ -5,6 +5,12 @@ async function listAll() {
   return rows;
 }
 
+async function findById(id) {
+  const { rows } = await db.query('SELECT * FROM groups WHERE id = $1', [id]);
+  return rows[0];
+}
+
 module.exports = {
+  findById,
   listAll,
 };
