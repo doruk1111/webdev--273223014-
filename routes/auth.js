@@ -15,7 +15,14 @@ router.post('/login', async (req, res) => {
     return res.status(401).json({ error: 'Wrong email or password' });
   }
   req.session.user = user;
+
+  req.session.save((err) => {
+  if (err) {
+    return res.status(500).json({ error: 'Could not save session' });
+    }
+
   return res.status(200).json(user);
+  });
 });
 
 router.post('/logout', (req, res) => {
