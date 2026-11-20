@@ -9,6 +9,24 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # ADDED: a PostgreSQL database for the tests, and the variables the app reads
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: studygroups
+          POSTGRES_PASSWORD: devpassword
+          POSTGRES_DB: studygroups
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U studygroups"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://studygroups:devpassword@localhost:5432/studygroups
+      SESSION_SECRET: ci-only-secret
     steps:
       - uses: actions/checkout@v4
 
@@ -18,6 +36,11 @@ jobs:
         with:
           # 22.9 or newer: the built-in coverage thresholds below landed in that version.
           node-version: '22.x'
+
+      # ADDED: create the tables on the empty CI database
+      - name: Apply migrations
+        run: |
+          for f in migrations/*.sql; do psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"; done
 
       - name: Node tests
         if: hashFiles('package.json') != ''
