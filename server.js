@@ -28,6 +28,10 @@ app.use(require('./routes/auth'));
 app.use(require('./routes/groups'));
 
 const port = 3000;
-app.listen(port, () => {
-  console.log(port);
-});
+if (require.main === module) {
+  app.listen(port, () => {
+    console.log(port);
+  });
+}
+
+module.exports = app;
