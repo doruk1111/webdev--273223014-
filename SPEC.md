@@ -55,6 +55,19 @@ Plain HTML and JavaScript with plain CSS. Four screens: sign in, the list of stu
 ## Architecture
 <!-- Exercise 3. One request traced through every layer, naming the file for each one,
      plus one place where your own code does not match this layering. -->
+One request, `POST /api/groups/:groupId/sessions`, through every layer:
+
+1. `server.js` mounts the session store (connect-pg-simple, in PostgreSQL) and `routes/sessions.js`. It exports the app so the tests can start it.
+2. `routes/sessions.js` is hit first. `requireApi` from `middleware/auth.js` answers 401 `{"error":"Sign in first"}` when there is no session, before any handler runs. The handler then reads the body and the group id, calls `scheduleSession`, and turns the error's `status` into the response: 201 with the new row, or the error's status with `{"error": message}`. It holds no rule.
+3. `services/sessions.js` holds every rule in `scheduleSession`: the end must be after the start (422), the group must exist (404), the user must own the group (403), and no other session of the same group may overlap (409, with a message that names the clash). It throws errors that carry a name and a status, and knows nothing about HTTP.
+4. `data/sessions.js` and `data/groups.js` are the only places with SQL, always with `$1` placeholders. `findOverlap` uses strict comparisons, so a session may start exactly when another ends.
+5. `migrations/002_sessions.sql` creates the `sessions` table that the data layer reads and writes.
+6. Back to the browser: `public/js/sessions.js` makes the REST calls with `fetch` (`/api/me`, `/api/groups` and `/api/groups/:id/sessions`). Its state is the signed-in user, the group and the sessions, held inside `loadSessions` and redrawn by calling it again after every change. The `errorText` helper turns a failed response into a readable sentence, and the page draws everything with `textContent`, with a loading, an empty and an error state.
+
+Where this codebase does not match its own layering: the `GET /api/groups/:groupId/sessions` handler in `routes/sessions.js` calls `groups.findById` and `sessionsData.listByGroup` directly, so the route reads the data layer and skips the service. I left it because listing has no rule yet; when it gets one, it moves into a service function.
+
+Other known gaps: the session store creates its own table at runtime, outside the migrations; `/sessions.html` is served without signing in, but its data is protected by the API; and the overlap check and the insert are two separate steps, so two simultaneous requests could both pass the check, which a database constraint would close.
+
 
 ## Acceptance criteria
 - [AC-1] A student signs in and lands on /groups, where they see the groups, each with its name and course.
@@ -98,6 +111,8 @@ Plain HTML and JavaScript with plain CSS. Four screens: sign in, the list of stu
 | AC-17 | |
 | AC-18 | |
 | AC-19 | |
+| AC-20 | |
+| AC-21 | |
 
 ## Spec vs result
 <!-- After the agent builds the slice: which criteria passed, which it missed or reinterpreted, and what you changed in this spec because of it. -->
