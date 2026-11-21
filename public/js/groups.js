@@ -7,7 +7,7 @@ async function loadGroups() {
   loadingEl.style.display = 'block';
   errorEl.style.display = 'none';
   emptyEl.style.display = 'none';
-  listEl.innerHTML = '';
+  listEl.textContent = '';
 
   try {
     const res = await fetch('/api/groups');
@@ -24,7 +24,15 @@ async function loadGroups() {
 
     groups.forEach((group) => {
       const li = document.createElement('li');
-      li.textContent = `${group.name} - ${group.course}`;
+      const a = document.createElement('a');
+      a.href = `/sessions.html?group=${group.id}`;
+      a.textContent = group.name;
+      li.appendChild(a);
+
+      const span = document.createElement('span');
+      span.textContent = ` - ${group.course}`;
+      li.appendChild(span);
+
       listEl.appendChild(li);
     });
   } catch (err) {

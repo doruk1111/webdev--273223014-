@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Study Sessions - Studying Together</title>
+</head>
+<body>
+  <h1 id="group-title">Study Sessions</h1>
+  <div id="loading">Loading sessions...</div>
+  <div id="error" style="color: red; display: none;"></div>
+  <div id="empty" style="display: none;">There are no sessions yet.</div>
+
+  <div id="add-session-container" style="display: none;">
+    <h2>Add Session</h2>
+    <div id="form-error" style="color: red; display: none;"></div>
+    <form id="add-session-form">
+      <div>
+        <label for="start">Start Time:</label>
+        <input type="datetime-local" id="start" required>
+      </div>
+      <div>
+        <label for="end">End Time:</label>
+        <input type="datetime-local" id="end" required>
+      </div>
+      <div>
+        <label for="place">Place:</label>
+        <input type="text" id="place" required>
+      </div>
+      <button type="submit">Add Session</button>
+    </form>
+  </div>
+
+  <ul id="sessions-list"></ul>
+
+  <script src="/js/sessions.js"></script>
+</body>
+</html>
