@@ -31,4 +31,10 @@ router.post('/logout', (req, res) => {
   });
 });
 
+const { requireApi } = require('../middleware/auth');
+
+router.get('/api/me', requireApi, (req, res) => {
+  res.status(200).json(req.session.user);
+});
+
 module.exports = router;

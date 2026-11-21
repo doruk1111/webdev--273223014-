@@ -1,7 +1,7 @@
 const db = require('../db');
 
 async function listAll() {
-  const { rows } = await db.query('SELECT name, course FROM groups');
+  const { rows } = await db.query('SELECT id, name, course, owner_id FROM groups ORDER BY id');
   return rows;
 }
 
