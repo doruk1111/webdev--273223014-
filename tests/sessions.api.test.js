@@ -177,3 +177,22 @@ test('AC-21: 404 for DELETE of a session that does not exist', async () => {
   const res = await cancel(cookie, 999999);
   assert.strictEqual(res.status, 404);
 });
+
+test('AC-5: group owner creates a session and it appears in the group list', async () => {
+  const cookie = await loginUser1();
+  const before = await count(1);
+
+  const result = await schedule(
+    cookie, 1,
+    '2030-02-10T10:00:00Z',
+    '2030-02-10T11:00:00Z',
+    'Library AC5'
+  );
+
+  assert.strictEqual(result.res.status, 201);
+  assert.strictEqual(result.body.place, 'Library AC5');
+  assert.strictEqual(await count(1), before + 1);
+
+  const sessions = await list(cookie, 1);
+  assert.ok(sessions.some((s) => s.id === result.body.id));
+});

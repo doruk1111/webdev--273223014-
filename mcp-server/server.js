@@ -1,8 +1,11 @@
 const readline = require('node:readline');
 const fs = require('node:fs');
 const path = require('node:path');
+const groupsService = require('../services/groups');
+const { getMcpUser } = require('../services/sessionAuth');
 
-const lectures = JSON.parse(fs.readFileSync(path.join(__dirname, 'lectures.json'), 'utf8')); /// Reads the file when the lecture.js starts.
+
+
 
 function textResult(id, text, isError) {        /// Builds a standart answer.
   return {
@@ -18,23 +21,39 @@ const { describe } = require('node:test');
 
 const tools = [
   {
-    name: 'find_lecture',
-    description: 'Return the title and topics of one course lecture by its number, 1 to 12. Use it when asked what a lecture covers.',
-    /// This is where AI needs to decide when to use this tool
+    name: 'list_groups',
+    description: 'Lists open study groups for a course and shows the number of members in each group.',
     inputSchema: {
       type: 'object',
       properties: {
-        number: { type: 'integer', description: 'Lecture number, 1 to 12' }
+        course: {
+          type: 'string',
+          description: 'The course name to search for.'
+        }
       },
-      required: ['number']
+      required: ['course']
     }
   },
   {
-    name: 'list_lectures',
-    description: 'List the number and title of every course lecture. Use it when asked what the course covers.',
+    name: 'upcoming_sessions',
+    description: 'Lists future study sessions for groups that the signed-in user belongs to.',
     inputSchema: {
       type: 'object',
       properties: {}
+    }
+  },
+  {
+    name: 'join_group',
+    description: 'Adds the signed-in user to a study group if they are not already a member.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        groupId: {
+          type: 'integer',
+          description: 'The ID of the study group to join.'
+        }
+      },
+      required: ['groupId']
     }
   }
 ];
@@ -43,7 +62,7 @@ function send(reply) {      /// This prints the outcome.
   process.stdout.write(JSON.stringify(reply) + '\n');
 }
 
-function handle(message) {    /// This decides what will be the answer.
+async function handle(message) {    /// This decides what will be the answer.
   if (message.method === 'initialize') {
     return {
       jsonrpc: '2.0',
@@ -51,7 +70,7 @@ function handle(message) {    /// This decides what will be the answer.
       result: {
         protocolVersion: message.params.protocolVersion,
         capabilities: { tools: {} },
-        serverInfo: { name: 'lectures', version: '0.1.0' }
+        serverInfo: { name: 'study-groups', version: '0.1.0' }
       }
     };
   }
@@ -71,30 +90,72 @@ function handle(message) {    /// This decides what will be the answer.
     const name = message.params.name;  /// This is a tool agent which wants to use the input
     const args = message.params.arguments;
 
-    if (name === 'find_lecture') {
-      const lecture = lectures.find(function (l) {
-        return l.number === args.number;
-      });
-            if (!lecture) {    /// This makes sure that if we find nothing we return the normal result.
-        return textResult(
-          message.id,
-          'There is no lecture ' + args.number + '. The course has lectures 1 to 12.',
-          true
-        );
-      }
-      return textResult(
-        message.id,
-        'Lecture ' + lecture.number + ': ' + lecture.title + '. Topics: ' + lecture.topics,
-        false
-      );
-    }
+    if (message.method === 'tools/call') {
+  const name = message.params.name;
+  const args = message.params.arguments;
 
-    if (name === 'list_lectures') {
-      const lines = lectures.map(function (l) {
-        return l.number + '. ' + l.title;
-      });
-      return textResult(message.id, lines.join('\n'), false);
-    }
+  if (name === 'list_groups') {
+  try {
+    const groups = await groupsService.list(args.course);
+
+    const lines = groups.map(function (group) {
+      return group.name + ' | Course: ' + group.course +
+        ' | Members: ' + group.member_count;
+    });
+
+    return textResult(
+      message.id,
+      lines.length ? lines.join('\n') : 'No groups found for this course.',
+      false
+    );
+  } catch (err) {
+    return textResult(message.id, err.message, true);
+  }
+}
+
+  if (name === 'upcoming_sessions') {
+  try {
+    const user = await getMcpUser(); // Identifies the owner
+    const sessions = await groupsService.upcomingSessions(user.id);   // Makes sure we are working with right person
+
+    const lines = sessions.map(function (session) {
+      return session.group_name +
+        ' | Course: ' + session.course +
+        ' | Starts: ' + session.start_time +
+        ' | Place: ' + (session.place || 'Not specified');
+    });
+
+    return textResult(
+      message.id,
+      lines.length ? lines.join('\n') : 'No upcoming sessions found.',
+      false
+    );
+  } catch (err) {
+    return textResult(message.id, err.message, true);
+  }
+}
+
+if (name === 'join_group') {
+  try {
+    const user = await getMcpUser(); // User Identifier
+
+    const membership = await groupsService.join(
+      args.groupId,   // Shows the group they'd like to join
+      user.id
+    );
+
+    return textResult(
+      message.id,
+      'Successfully joined group ' + args.groupId + '.',
+      false
+    );
+  } catch (err) {
+    return textResult(message.id, err.message, true);
+  }
+}
+
+
+}
 
         return {    /// This works when the tool name isn't our own tool, The server sends error message -32606
       jsonrpc: '2.0',
@@ -115,10 +176,10 @@ function handle(message) {    /// This decides what will be the answer.
 
 const reader = readline.createInterface({ input: process.stdin });
 
-reader.on('line', function (line) {
+reader.on('line', async function (line) {
   console.error('got: ' + line);
   const message = JSON.parse(line);     /// This converts text into object.
-  const reply = handle(message);
+  const reply = await handle(message);
   if (reply !== null) {
     send(reply);
   }

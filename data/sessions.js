@@ -43,10 +43,29 @@ async function findOverlap(groupId, startTime, endTime) {
   return result.rows[0];
 }
 
+
+async function listUpcomingByMember(userId) {
+  const { rows } = await db.query(
+    `SELECT s.*, g.name AS group_name, g.course
+     FROM sessions s
+     JOIN groups g ON g.id = s.group_id
+     JOIN group_memberships gm ON gm.group_id = g.id
+     WHERE gm.user_id = $1
+       AND s.start_time > NOW()
+     ORDER BY s.start_time`,
+    [userId]
+  );
+
+  return rows;
+}
+
+
+
 module.exports = {
   insert,
   listByGroup,
   findById,
   remove,
   findOverlap,
+  listUpcomingByMember,
 };

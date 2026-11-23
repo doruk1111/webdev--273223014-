@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require('express');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
@@ -23,6 +24,10 @@ app.use(
     saveUninitialized: false,
   })
 );
+
+app.get('/', (req, res) => {
+  res.redirect('/login');
+});
 
 app.use(require('./routes/auth'));
 app.use(require('./routes/groups'));

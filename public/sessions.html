@@ -11,7 +11,27 @@
   <div id="empty" style="display: none;">There are no sessions yet.</div>
 
   <div id="add-session-container" style="display: none;">
-    <h2>Add Session</h2>
+   <h2>Add Session</h2>
+
+<div>
+  <label for="topic">Session Topic:</label>
+  <input type="text" id="topic" placeholder="e.g. Arrays and pointers">
+  <button type="button" id="suggest-agenda">Suggest with AI</button>
+</div>
+
+<div id="agenda-note" style="display: none;"></div>
+
+<div id="agenda-suggestion" style="display: none;">
+  <h3>AI Suggestion (you can edit it)</h3>
+
+  <label for="suggested-title">Suggested Title:</label>
+  <input type="text" id="suggested-title">
+
+  <label for="suggested-agenda">Suggested Agenda:</label>
+  <textarea id="suggested-agenda" rows="5"></textarea>
+</div>
+
+<div id="form-error" style="color: red; display: none;"></div>
     <div id="form-error" style="color: red; display: none;"></div>
     <form id="add-session-form">
       <div>

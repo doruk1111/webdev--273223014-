@@ -67,6 +67,67 @@ async function loadSessions() {
     if (user && group && user.id === group.owner_id) {
       addSessionContainer.style.display = 'block';
     }
+    const suggestButton = document.getElementById('suggest-agenda');
+const topicInput = document.getElementById('topic');
+const agendaNote = document.getElementById('agenda-note');
+const agendaSuggestion = document.getElementById('agenda-suggestion');
+
+suggestButton.addEventListener('click', async () => {
+  agendaNote.style.display = 'none';
+  agendaSuggestion.style.display = 'none';
+  formErrorEl.style.display = 'none';
+
+  if (!topicInput.value.trim()) {
+    agendaNote.textContent = 'Please enter a session topic first.';
+    agendaNote.style.display = 'block';
+    return;
+  }
+
+  suggestButton.disabled = true;
+  suggestButton.textContent = 'Generating...';
+
+  try {
+    const response = await fetch(
+      `/api/groups/${groupId}/agenda-suggestion`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: topicInput.value.trim() })
+      }
+    );
+
+    if (response.status === 401) {
+      window.location.href = '/login';
+      return;
+    }
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Could not generate suggestion');
+    }
+
+    if (result.title || result.agenda.length > 0) {
+      document.getElementById('suggested-title').value = result.title;
+      document.getElementById('suggested-agenda').value =
+        result.agenda.join('\n');
+
+      agendaSuggestion.style.display = 'block';
+    }
+
+    if (result.note) {
+      agendaNote.textContent = result.note;
+      agendaNote.style.display = 'block';
+    }
+  } catch (err) {
+    agendaNote.textContent =
+      'AI suggestions are unavailable. Please enter the details manually.';
+    agendaNote.style.display = 'block';
+  } finally {
+    suggestButton.disabled = false;
+    suggestButton.textContent = 'Suggest with AI';
+  }
+});
 
     if (!sessions || sessions.length === 0) {
       emptyEl.style.display = 'block';
